@@ -1,0 +1,93 @@
+---
+- name: 部署LNMP完整Web环境
+  hosts: localhost
+  become: yes
+  tasks:
+    # 1. 更新包缓存
+    - name: 更新apt缓存
+      apt:
+        update_cache: yes
+
+    # 2. 安装Nginx
+    - name: 安装Nginx
+      apt:
+        name: nginx
+        state: present
+
+    # 3. 安装MySQL
+    - name: 安装MySQL服务端
+      apt:
+        name: mysql-server
+        state: present
+
+    # 4. 安装PHP及常用扩展
+    - name: 安装PHP及扩展
+      apt:
+        name:
+          - php-fpm
+          - php-mysql
+          - php-curl
+          - php-gd
+          - php-xml
+          - php-mbstring
+        state: present
+
+    # 5. 启动Nginx
+    - name: 启动Nginx服务
+      systemd:
+        name: nginx
+        state: started
+        enabled: yes
+
+    # 6. 启动PHP-FPM
+    - name: 启动PHP-FPM
+      systemd:
+        name: php8.1-fpm
+        state: started
+        enabled: yes
+      # 注意：你的PHP版本可能不同，见下方说明
+
+    # 7. 启动MySQL
+    - name: 启动MySQL服务
+      systemd:
+        name: mysql
+        state: started
+        enabled: yes
+
+    # 8. 创建测试PHP文件
+    - name: 创建phpinfo测试文件
+      copy:
+        content: |
+          <?php
+          phpinfo();
+          ?>
+        dest: /var/www/html/info.php
+        mode: '0644'
+
+    # 9. 配置Nginx支持PHP
+    - name: 配置Nginx默认站点支持PHP
+      copy:
+        content: |
+          server {
+              listen 80 default_server;
+              root /var/www/html;
+              index index.php index.html index.htm;
+
+              location / {
+                  try_files $uri $uri/ =404;
+              }
+
+              location ~ \.php$ {
+                  include snippets/fastcgi-php.conf;
+                  fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
+              }
+          }
+        dest: /etc/nginx/sites-available/default
+        mode: '0644'
+      notify: 重启Nginx
+
+  handlers:
+    - name: 重启Nginx
+      systemd:
+        name: nginx
+        state: restarted
