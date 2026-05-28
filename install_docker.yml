@@ -1,0 +1,50 @@
+---
+- name: 安装 Docker（使用系统源）
+  hosts: localhost
+  become: yes
+  
+  tasks:
+    - name: 删除有问题的 Docker 仓库
+      file:
+        path: /etc/apt/sources.list.d/docker.list
+        state: absent
+      ignore_errors: yes
+
+    - name: 更新 apt 缓存
+      apt:
+        update_cache: yes
+
+    - name: 安装 docker.io
+      apt:
+        name: docker.io
+        state: present
+
+    - name: 启动 Docker
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: 创建配置目录
+      file:
+        path: /etc/docker
+        state: directory
+
+    - name: 配置镜像加速
+      copy:
+        content: |
+          {
+            "registry-mirrors": [
+    "https://docker.m.daocloud.io",
+    "https://dockerproxy.com",
+    "https://docker.nju.edu.cn"
+            ]
+          }
+        dest: /etc/docker/daemon.json
+      notify: restart docker
+
+  handlers:
+    - name: restart docker
+      systemd:
+        name: docker
+        state: restarted
