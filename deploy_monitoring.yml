@@ -1,0 +1,67 @@
+---
+- name: 一键部署监控栈（Prometheus + Grafana + Node Exporter）
+  hosts: 127.0.0.1
+  connection: local
+  gather_facts: no
+  become: yes
+  vars:
+    monitoring_dir: /opt/monitoring
+
+  tasks:
+    - name: 创建监控项目目录
+      file:
+        path: "{{ monitoring_dir }}"
+        state: directory
+
+    - name: 创建 prometheus 配置目录
+      file:
+        path: "{{ monitoring_dir }}/prometheus"
+        state: directory
+
+    - name: 复制 docker-compose.yml
+      copy:
+        src: /home/by/ansible-demo/monitoring/docker-compose.yml
+        dest: "{{ monitoring_dir }}/docker-compose.yml"
+
+    - name: 复制 prometheus 配置文件
+      copy:
+        src: /home/by/ansible-demo/monitoring/prometheus/prometheus.yml
+        dest: "{{ monitoring_dir }}/prometheus/prometheus.yml"
+
+    - name: 停止旧监控容器
+      shell: cd {{ monitoring_dir }} && docker-compose down 2>/dev/null || true
+      args:
+        executable: /bin/bash
+      ignore_errors: yes
+
+    - name: 启动监控服务
+      shell: cd {{ monitoring_dir }} && docker-compose up -d
+      args:
+        executable: /bin/bash
+
+    - name: 等待服务启动
+      pause:
+        seconds: 5
+
+    - name: 验证 Prometheus
+      uri:
+        url: http://localhost:9090
+        status_code: 200
+      register: prom_check
+      ignore_errors: yes
+
+    - name: 验证 Grafana
+      uri:
+        url: http://localhost:3000
+        status_code: 200
+      register: grafana_check
+      ignore_errors: yes
+
+    - name: 显示部署结果
+      debug:
+        msg: |
+          监控栈部署完成：
+          - Prometheus: http://localhost:9090
+          - Grafana: http://localhost:3000 (admin/admin)
+          - Node Exporter: 指标已采集
+      when: prom_check.status is defined and grafana_check.status is defined
